@@ -34,29 +34,21 @@ export async function getCostsForProject(projectId: string): Promise<Cost[]> {
   return (data || []) as Cost[];
 }
 
-export function computeCostMetrics(projectPrice: number, costs: Cost[]) {
+export async function computeCostMetrics(projectPrice: number, costs: Cost[]) {
   const totals = costs.reduce(
     (acc, cost) => {
-      acc.labor += cost.labor_cost;
-      acc.tool += cost.tool_cost;
-      acc.hosting += cost.hosting_cost;
-      acc.other += cost.other_cost;
+      acc.labor += cost.labor_cost || 0;
+      acc.tool += cost.tool_cost || 0;
+      acc.hosting += cost.hosting_cost || 0;
+      acc.other += cost.other_cost || 0;
       return acc;
     },
     { labor: 0, tool: 0, hosting: 0, other: 0 },
   );
 
-  const total_cost =
-    totals.labor + totals.tool + totals.hosting + totals.other;
+  const total_cost = totals.labor + totals.tool + totals.hosting + totals.other;
   const profit = projectPrice - total_cost;
-  const margin =
-    projectPrice > 0 ? (profit / projectPrice) * 100 : 0;
+  const margin = projectPrice > 0 ? (profit / projectPrice) * 100 : 0;
 
-  return {
-    ...totals,
-    total_cost,
-    profit,
-    margin,
-  };
+  return { ...totals, total_cost, profit, margin };
 }
-

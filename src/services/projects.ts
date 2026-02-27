@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/insforge';
 
-export type ProjectStatus = 'active' | 'completed' | 'paused';
+export type ProjectStatus = 'active' | 'completed' | 'paused' | 'lead';
 export type ServiceType = 'website' | 'ai_workflow' | 'automation' | 'management';
 
 export type Project = {
@@ -39,38 +39,66 @@ export type Cost = {
 export type ProjectWithRelations = Project & {
   payments: Payment[];
   costs: Cost[];
+  client_name?: string;
+};
+
+export type ProjectWithClient = Project & {
+  client_name: string;
+  company_name: string;
+  payments?: Payment[];
 };
 
 type CreateProjectInput = Omit<Project, 'id' | 'created_at' | 'final_payment_date'>;
+type UpdateProjectInput = Partial<CreateProjectInput>;
 
-export async function getProjects(): Promise<Project[]> {
-  const { data, error } = await db
-    .from('projects')
-    .select('*')
-    .order('created_at', { ascending: false });
+export async function getProjects(): Promise<ProjectWithClient[]> {
+  const [projectsRes, clientsRes, paymentsRes] = await Promise.all([
+    db.from('projects').select('*').order('created_at', { ascending: false }),
+    db.from('clients').select('id, client_name, company_name'),
+    db.from('payments').select('*'),
+  ]);
 
-  if (error) throw error;
-  return (data || []) as Project[];
+  if (projectsRes.error) throw projectsRes.error;
+  if (clientsRes.error) throw clientsRes.error;
+  if (paymentsRes.error) throw paymentsRes.error;
+
+  const projects = (projectsRes.data || []) as Project[];
+  const clients = (clientsRes.data || []) as any[];
+  const payments = (paymentsRes.data || []) as Payment[];
+
+  return projects.map((p) => {
+    const client = clients.find((c: any) => c.id === p.client_id);
+    const projectPayments = payments.filter((pay) => pay.project_id === p.id);
+    return {
+      ...p,
+      client_name: client?.client_name ?? 'Unknown',
+      company_name: client?.company_name ?? '',
+      payments: projectPayments,
+    };
+  });
 }
 
-export async function getProjectWithRelations(
-  id: string,
-): Promise<ProjectWithRelations | null> {
-  const { data, error } = await db
-    .from('projects')
-    .select(
-      `
-      *,
-      payments(*),
-      costs(*)
-    `,
-    )
-    .eq('id', id)
-    .maybeSingle();
+export async function getProjectWithRelations(id: string): Promise<ProjectWithRelations | null> {
+  const [projectRes, paymentsRes, costsRes, clientsRes] = await Promise.all([
+    db.from('projects').select('*').eq('id', id).maybeSingle(),
+    db.from('payments').select('*').eq('project_id', id),
+    db.from('costs').select('*').eq('project_id', id),
+    db.from('clients').select('id, client_name, company_name'),
+  ]);
 
-  if (error) throw error;
-  if (!data) return null;
-  return data as ProjectWithRelations;
+  if (projectRes.error) throw projectRes.error;
+  if (!projectRes.data) return null;
+
+  const project = projectRes.data as Project;
+  const clients = (clientsRes.data || []) as any[];
+  const client = clients.find((c: any) => c.id === project.client_id);
+
+  return {
+    ...project,
+    client_name: client?.client_name,
+    payments: (paymentsRes.data || []) as Payment[],
+    costs: (costsRes.data || []) as Cost[],
+  };
 }
 
 export async function createProjectWithPayments(
@@ -88,8 +116,8 @@ export async function createProjectWithPayments(
 
   if (projectError) throw projectError;
 
-  const advanceAmount = input.price * 0.4;
-  const finalAmount = input.price * 0.6;
+  const advanceAmount = (input.price || 0) * 0.4;
+  const finalAmount = (input.price || 0) * 0.6;
 
   const { data: payments, error: paymentsError } = await db
     .from('payments')
@@ -119,3 +147,19 @@ export async function createProjectWithPayments(
   };
 }
 
+export async function updateProject(id: string, updates: UpdateProjectInput): Promise<Project> {
+  const { data, error } = await db
+    .from('projects')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Project;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const { error } = await db.from('projects').delete().eq('id', id);
+  if (error) throw error;
+}
