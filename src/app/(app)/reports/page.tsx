@@ -236,7 +236,7 @@ export default function ReportsPage() {
                                             <Cell key={`cell-${index}`} fill={entry.fill} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value: number) => value.toString()} />
+                                    <Tooltip formatter={(value: number | undefined) => value?.toString() ?? ""} />
                                 </PieChart>
                             </ResponsiveContainer>
                         )}
