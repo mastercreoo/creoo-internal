@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getProjectWithRelations, updateProject, deleteProject } from '@/services/projects';
+import { getProjectWithRelations, updateProject, deleteProject, createFinalPayment } from '@/services/projects';
+import { db } from '@/lib/insforge';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,6 +21,31 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json();
     const project = await updateProject(id, body);
+
+    // Auto-create final payment when project is marked as completed
+    if (body.status === 'completed' && project) {
+      // Check if final payment already exists
+      const { data: existingFinal } = await db
+        .from('payments')
+        .select('id')
+        .eq('project_id', id)
+        .eq('type', 'final')
+        .maybeSingle();
+
+      if (!existingFinal) {
+        // Get advance payment amount
+        const { data: advancePayment } = await db
+          .from('payments')
+          .select('amount')
+          .eq('project_id', id)
+          .eq('type', 'advance')
+          .maybeSingle();
+
+        const advanceAmount = advancePayment?.amount || 0;
+        await createFinalPayment(id, project.price || 0, advanceAmount);
+      }
+    }
+
     return NextResponse.json(project);
   } catch (error) {
     console.error('Error updating project', error);

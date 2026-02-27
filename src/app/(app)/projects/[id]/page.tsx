@@ -10,7 +10,11 @@ import {
     FileText,
     DollarSign,
     Loader2,
-    Edit
+    Edit,
+    Download,
+    Trash2,
+    File,
+    X
 } from "lucide-react"
 import Link from "next/link"
 
@@ -56,6 +60,15 @@ type Cost = {
     other_cost: number
 }
 
+type Document = {
+    id: string
+    name: string
+    type: string
+    size: number
+    storage_path: string
+    created_at: string
+}
+
 type ProjectDetail = {
     id: string
     title: string
@@ -68,6 +81,15 @@ type ProjectDetail = {
     payments: Payment[]
     costs: Cost[]
 }
+
+const ALLOWED_MIME = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/png',
+    'image/jpeg'
+]
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export default function ProjectDetailsPage() {
     const params = useParams()
@@ -84,13 +106,22 @@ export default function ProjectDetailsPage() {
         title: "",
         service_type: "",
         price: "",
+        advance_percentage: "40",
         status: "",
         start_date: "",
         deadline: "",
     })
+    const [documents, setDocuments] = useState<Document[]>([])
+    const [documentsLoading, setDocumentsLoading] = useState(false)
+    const [uploading, setUploading] = useState(false)
+    const [uploadError, setUploadError] = useState<string | null>(null)
+    const [docDialogOpen, setDocDialogOpen] = useState(false)
+    const [selectedFile, setSelectedFile] = useState<File | null>(null)
+    const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
     useEffect(() => {
         loadProject()
+        loadDocuments()
     }, [id])
 
     async function loadProject() {
@@ -105,6 +136,19 @@ export default function ProjectDetailsPage() {
             setError("Failed to load project")
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function loadDocuments() {
+        setDocumentsLoading(true)
+        try {
+            const res = await fetch(`/api/documents?project_id=${id}`)
+            if (!res.ok) throw new Error("Failed to load documents")
+            setDocuments(await res.json())
+        } catch {
+            setDocuments([])
+        } finally {
+            setDocumentsLoading(false)
         }
     }
 
@@ -150,6 +194,7 @@ export default function ProjectDetailsPage() {
             title: project.title,
             service_type: project.service_type,
             price: project.price.toString(),
+            advance_percentage: ((project as any).advance_percentage || 40).toString(),
             status: project.status,
             start_date: project.start_date || "",
             deadline: project.deadline || "",
@@ -168,6 +213,7 @@ export default function ProjectDetailsPage() {
                     title: editForm.title,
                     service_type: editForm.service_type,
                     price: parseFloat(editForm.price),
+                    advance_percentage: parseFloat(editForm.advance_percentage),
                     status: editForm.status,
                     start_date: editForm.start_date || null,
                     deadline: editForm.deadline || null,
@@ -181,6 +227,93 @@ export default function ProjectDetailsPage() {
         } finally {
             setEditingSaving(false)
         }
+    }
+
+    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setUploadError(null)
+
+        // Validate MIME type
+        if (!ALLOWED_MIME.includes(file.type)) {
+            setUploadError("Invalid file type. Allowed: PDF, DOCX, XLSX, PNG, JPG")
+            return
+        }
+
+        // Validate file size
+        if (file.size > MAX_FILE_SIZE) {
+            setUploadError("File size exceeds 10 MB limit")
+            return
+        }
+
+        setSelectedFile(file)
+    }
+
+    async function handleUploadDocument() {
+        if (!selectedFile) return
+
+        setUploading(true)
+        setUploadError(null)
+
+        try {
+            const formData = new FormData()
+            formData.append('file', selectedFile)
+            formData.append('project_id', id)
+            formData.append('storage_path', `documents/${Date.now()}-${selectedFile.name}`)
+
+            const res = await fetch('/api/documents', {
+                method: 'POST',
+                body: formData,
+            })
+
+            if (!res.ok) {
+                const error = await res.text()
+                throw new Error(error || 'Failed to upload document')
+            }
+
+            setDocDialogOpen(false)
+            setSelectedFile(null)
+            await loadDocuments()
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : 'Upload failed')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    async function handleDeleteDocument(docId: string) {
+        if (!confirm('Delete this document?')) return
+
+        setDeletingDocId(docId)
+        try {
+            const res = await fetch(`/api/documents/${docId}`, {
+                method: 'DELETE',
+            })
+            if (!res.ok) throw new Error('Failed to delete document')
+            await loadDocuments()
+        } catch (err) {
+            console.error(err)
+            setUploadError('Failed to delete document')
+        } finally {
+            setDeletingDocId(null)
+        }
+    }
+
+    function getFileIcon(mimeType: string) {
+        if (mimeType.includes('pdf')) return '📄'
+        if (mimeType.includes('word')) return '📝'
+        if (mimeType.includes('sheet')) return '📊'
+        if (mimeType.includes('image')) return '🖼️'
+        return '📎'
+    }
+
+    function formatFileSize(bytes: number): string {
+        if (bytes === 0) return '0 Bytes'
+        const k = 1024
+        const sizes = ['Bytes', 'KB', 'MB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
     }
 
     if (loading) {
@@ -241,7 +374,7 @@ export default function ProjectDetailsPage() {
                     >
                         <Edit className="mr-2 h-4 w-4" /> Edit Project
                     </Button>
-                    {finPayment && (
+                    {finPayment && project.status === "completed" && (
                         <Button
                             variant="outline"
                             className="bg-zinc-900 border-zinc-800"
@@ -249,10 +382,11 @@ export default function ProjectDetailsPage() {
                                 invoiceNumber: `INV-${Date.now().toString().slice(-5)}`,
                                 clientName: project.client_name ?? "Client",
                                 companyName: project.client_name ?? "Client",
-                                service: project.title,
-                                amount: finPayment.amount,
-                                dueDate: project.deadline ?? "",
-                                isAdvance: false,
+                                projectTitle: project.title,
+                                quotedPrice: project.price,
+                                advancePaid: advPayment?.amount ?? 0,
+                                balanceDue: finPayment.amount,
+                                issuedDate: new Date().toISOString().split('T')[0],
                             })}
                         >
                             <FileText className="mr-2 h-4 w-4" /> Generate Final Invoice
@@ -264,11 +398,11 @@ export default function ProjectDetailsPage() {
             <div className="grid gap-4 md:grid-cols-3">
                 <Card className="border-none bg-zinc-900/50">
                     <CardHeader className="pb-2">
-                        <CardDescription className="text-xs font-bold uppercase tracking-widest">Total Price</CardDescription>
+                        <CardDescription className="text-xs font-bold uppercase tracking-widest">Quoted Price</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{formatCurrency(project.price)}</div>
-                        <div className="text-xs text-zinc-500 mt-1">40/60 Split Applied</div>
+                        <div className="text-xs text-zinc-500 mt-1">{(project as any).advance_percentage || 40}% / {100 - ((project as any).advance_percentage || 40)}% Split</div>
                     </CardContent>
                 </Card>
                 <Card className="border-none bg-zinc-900/50">
@@ -368,6 +502,73 @@ export default function ProjectDetailsPage() {
                         </h2>
                         <TiptapEditor content="" />
                     </div>
+
+                    {/* Documents Section */}
+                    <Card className="border-none bg-zinc-900/50">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Project Documents</CardTitle>
+                                <CardDescription>Upload and manage project files.</CardDescription>
+                            </div>
+                            <Button
+                                size="sm"
+                                onClick={() => setDocDialogOpen(true)}
+                                className="bg-primary hover:bg-primary/90"
+                            >
+                                <Plus className="h-4 w-4 mr-2" /> Upload Document
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {documentsLoading ? (
+                                <div className="flex items-center justify-center py-8 text-zinc-500">
+                                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading documents...
+                                </div>
+                            ) : documents.length === 0 ? (
+                                <p className="text-sm text-zinc-500 py-8">No documents uploaded yet.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {documents.map((doc) => (
+                                        <div
+                                            key={doc.id}
+                                            className="flex items-center justify-between p-3 rounded-lg border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 transition"
+                                        >
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <span className="text-2xl">{getFileIcon(doc.type)}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{doc.name}</p>
+                                                    <p className="text-xs text-zinc-500">
+                                                        {formatFileSize(doc.size)} • {new Date(doc.created_at).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <a
+                                                    href={`/api/documents/download?path=${encodeURIComponent(doc.storage_path)}`}
+                                                    className="p-2 hover:bg-zinc-800 rounded-lg transition"
+                                                    title="Download"
+                                                    download
+                                                >
+                                                    <Download className="h-4 w-4 text-zinc-400" />
+                                                </a>
+                                                <button
+                                                    onClick={() => handleDeleteDocument(doc.id)}
+                                                    disabled={deletingDocId === doc.id}
+                                                    className="p-2 hover:bg-red-500/10 rounded-lg transition text-zinc-400 hover:text-red-400 disabled:opacity-50"
+                                                    title="Delete"
+                                                >
+                                                    {deletingDocId === doc.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="space-y-6">
@@ -379,7 +580,7 @@ export default function ProjectDetailsPage() {
                             {advPayment && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-zinc-400">Advance (40%)</span>
+                                        <span className="text-zinc-400">Advance Payment</span>
                                         <Badge
                                             className={advPayment.status === "paid"
                                                 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
@@ -401,7 +602,7 @@ export default function ProjectDetailsPage() {
                             {finPayment && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-zinc-400">Final (60%)</span>
+                                        <span className="text-zinc-400">Final Payment</span>
                                         <Badge
                                             className={finPayment.status === "paid"
                                                 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
@@ -461,7 +662,7 @@ export default function ProjectDetailsPage() {
                                 onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2">
                                 <Label>Service Type</Label>
                                 <Select value={editForm.service_type} onValueChange={(v) => setEditForm({ ...editForm, service_type: v })}>
@@ -477,7 +678,7 @@ export default function ProjectDetailsPage() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label>Total Price ($) *</Label>
+                                <Label>Quoted Price ($) *</Label>
                                 <Input
                                     type="number"
                                     placeholder="8500"
@@ -485,6 +686,23 @@ export default function ProjectDetailsPage() {
                                     value={editForm.price}
                                     onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Advance %</Label>
+                                <Select value={editForm.advance_percentage} onValueChange={(v) => setEditForm({ ...editForm, advance_percentage: v })}>
+                                    <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10%</SelectItem>
+                                        <SelectItem value="20">20%</SelectItem>
+                                        <SelectItem value="25">25%</SelectItem>
+                                        <SelectItem value="30">30%</SelectItem>
+                                        <SelectItem value="40">40%</SelectItem>
+                                        <SelectItem value="50">50%</SelectItem>
+                                        <SelectItem value="60">60%</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <div className="space-y-2">
@@ -525,6 +743,65 @@ export default function ProjectDetailsPage() {
                     <DialogFooter>
                         <Button onClick={handleProjectEdit} disabled={editingSaving || !editForm.title || !editForm.price}>
                             {editingSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...</> : "Update Project"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Upload Document Dialog */}
+            <Dialog open={docDialogOpen} onOpenChange={setDocDialogOpen}>
+                <DialogContent className="bg-zinc-950 border-zinc-800">
+                    <DialogHeader>
+                        <DialogTitle>Upload Document</DialogTitle>
+                        <DialogDescription>Add a project document. Max 10 MB. Allowed: PDF, DOCX, XLSX, PNG, JPG</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Select File</Label>
+                            <div className="relative">
+                                <input
+                                    type="file"
+                                    accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                                    onChange={handleFileSelect}
+                                    className="block w-full text-sm text-zinc-500
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-lg file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-primary file:text-primary-foreground
+                                        hover:file:bg-primary/90
+                                        cursor-pointer border border-zinc-800 rounded-lg p-2 bg-zinc-900"
+                                />
+                            </div>
+                            {selectedFile && (
+                                <p className="text-xs text-zinc-400">
+                                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                                </p>
+                            )}
+                        </div>
+                        {uploadError && (
+                            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                                {uploadError}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setDocDialogOpen(false)
+                                setSelectedFile(null)
+                                setUploadError(null)
+                            }}
+                            disabled={uploading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleUploadDocument}
+                            disabled={uploading || !selectedFile}
+                            className="bg-primary hover:bg-primary/90"
+                        >
+                            {uploading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</> : "Upload"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
