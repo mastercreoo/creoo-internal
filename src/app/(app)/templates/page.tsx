@@ -63,9 +63,13 @@ export default function TemplatesPage() {
         content: "",
     })
 
-    const [editForm, setEditForm] = useState({
+    const [editForm, setEditForm] = useState<{
+        name: string
+        type: "proposal" | "invoice" | "contract" | "sow"
+        content: string
+    }>({
         name: "",
-        type: "proposal" as const,
+        type: "proposal",
         content: "",
     })
 
