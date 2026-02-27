@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm install --save-dev @types/bcryptjs @types/jsonwebtoken)",
+      "Bash(ls \"c:/Users/creoo/Documents/sabai internal portal/creo-os/src/app/\\(app\\)/\")",
+      "Bash(ls \"c:/Users/creoo/Documents/sabai internal portal/creo-os/src/app/\\(app\\)/projects/\")",
+      "Bash(ls \"c:/Users/creoo/Documents/sabai internal portal/creo-os/src/app/\\(app\\)/finance/\")",
+      "Bash(ls \"c:/Users/creoo/Documents/sabai internal portal/creo-os/src/app/\\(app\\)/clients/\")",
+      "Bash(ls \"c:/Users/creoo/Documents/sabai internal portal/creo-os/src/app/\\(app\\)/documents/\")"
+    ]
+  }
+}
