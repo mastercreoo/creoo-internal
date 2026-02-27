@@ -2,6 +2,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import ListItem from '@tiptap/extension-list-item'
 import {
     Bold,
     Italic,
@@ -104,13 +105,20 @@ export const TiptapEditor = ({
 }) => {
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({
+                listItem: {
+                    HTMLAttributes: {
+                        class: 'list-item',
+                    }
+                }
+            }),
+            ListItem,
         ],
         content: content,
         immediatelyRender: false,
         editorProps: {
             attributes: {
-                class: 'prose prose-invert max-w-none focus:outline-none min-h-[200px] p-4 text-zinc-300',
+                class: 'prose prose-invert max-w-none focus:outline-none min-h-[200px] p-4 text-zinc-300 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:marker:text-zinc-400',
             },
         },
         onUpdate: ({ editor }) => {

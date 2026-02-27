@@ -8,7 +8,6 @@ import {
     CircleDollarSign,
     FileText,
     FileCode,
-    Files,
     Settings,
     Plus,
 } from "lucide-react"
@@ -56,11 +55,6 @@ const data = {
             title: "Reports",
             url: "/reports",
             icon: FileText,
-        },
-        {
-            title: "Documents",
-            url: "/documents",
-            icon: Files,
         },
         {
             title: "Templates",

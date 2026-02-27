@@ -15,6 +15,7 @@ export type Project = {
   start_date: string | null;
   deadline: string | null;
   final_payment_date: string | null;
+  advance_percentage: number;
   created_at: string;
 };
 
@@ -49,7 +50,7 @@ export type ProjectWithClient = Project & {
 };
 
 type CreateProjectInput = Omit<Project, 'id' | 'created_at' | 'final_payment_date'>;
-type UpdateProjectInput = Partial<CreateProjectInput>;
+type UpdateProjectInput = Partial<Omit<CreateProjectInput, 'client_id'>>;
 
 export async function getProjects(): Promise<ProjectWithClient[]> {
   const [projectsRes, clientsRes, paymentsRes] = await Promise.all([
@@ -116,8 +117,9 @@ export async function createProjectWithPayments(
 
   if (projectError) throw projectError;
 
-  const advanceAmount = (input.price || 0) * 0.4;
-  const finalAmount = (input.price || 0) * 0.6;
+  // Create ONLY the advance payment record
+  const advancePercentage = input.advance_percentage || 40;
+  const advanceAmount = (input.price || 0) * (advancePercentage / 100);
 
   const { data: payments, error: paymentsError } = await db
     .from('payments')
@@ -126,13 +128,6 @@ export async function createProjectWithPayments(
         project_id: project.id,
         type: 'advance',
         amount: advanceAmount,
-        status: 'pending',
-        paid_date: null,
-      },
-      {
-        project_id: project.id,
-        type: 'final',
-        amount: finalAmount,
         status: 'pending',
         paid_date: null,
       },
@@ -145,6 +140,29 @@ export async function createProjectWithPayments(
     project: project as Project,
     payments: (payments || []) as Payment[],
   };
+}
+
+export async function createFinalPayment(
+  projectId: string,
+  quotedPrice: number,
+  advanceAmount: number,
+): Promise<Payment> {
+  const finalAmount = quotedPrice - advanceAmount;
+
+  const { data, error } = await db
+    .from('payments')
+    .insert({
+      project_id: projectId,
+      type: 'final',
+      amount: finalAmount,
+      status: 'pending',
+      paid_date: null,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Payment;
 }
 
 export async function updateProject(id: string, updates: UpdateProjectInput): Promise<Project> {

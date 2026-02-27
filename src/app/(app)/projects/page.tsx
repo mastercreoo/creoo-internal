@@ -60,6 +60,7 @@ type ProjectWithClient = {
     title: string
     service_type: string
     price: number
+    advance_percentage: number
     status: string
     start_date: string | null
     deadline: string | null
@@ -90,6 +91,7 @@ export default function ProjectsPage() {
         title: "",
         service_type: "website",
         price: "",
+        advance_percentage: "40",
         status: "active",
         start_date: "",
         deadline: "",
@@ -98,6 +100,7 @@ export default function ProjectsPage() {
         title: "",
         service_type: "website",
         price: "",
+        advance_percentage: "40",
         status: "active",
         start_date: "",
         deadline: "",
@@ -137,13 +140,14 @@ export default function ProjectsPage() {
                 body: JSON.stringify({
                     ...form,
                     price: parseFloat(form.price),
+                    advance_percentage: parseFloat(form.advance_percentage),
                     start_date: form.start_date || null,
                     deadline: form.deadline || null,
                 }),
             })
             if (!res.ok) throw new Error("Failed to create project")
             setDialogOpen(false)
-            setForm({ client_id: "", title: "", service_type: "website", price: "", status: "active", start_date: "", deadline: "" })
+            setForm({ client_id: "", title: "", service_type: "website", price: "", advance_percentage: "40", status: "active", start_date: "", deadline: "" })
             await loadProjects()
         } catch (err) {
             console.error(err)
@@ -173,6 +177,7 @@ export default function ProjectsPage() {
                     title: editForm.title,
                     service_type: editForm.service_type,
                     price: parseFloat(editForm.price),
+                    advance_percentage: parseFloat(editForm.advance_percentage),
                     status: editForm.status,
                     start_date: editForm.start_date || null,
                     deadline: editForm.deadline || null,
@@ -195,6 +200,7 @@ export default function ProjectsPage() {
             title: project.title,
             service_type: project.service_type,
             price: project.price.toString(),
+            advance_percentage: (project as any).advance_percentage?.toString() || "40",
             status: project.status,
             start_date: project.start_date || "",
             deadline: project.deadline || "",
@@ -238,7 +244,7 @@ export default function ProjectsPage() {
                     <DialogContent className="bg-zinc-950 border-zinc-800">
                         <DialogHeader>
                             <DialogTitle>New Project</DialogTitle>
-                            <DialogDescription>Create a new project. Payments (40/60 split) will be created automatically.</DialogDescription>
+                            <DialogDescription>Create a new project with configurable payment terms.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="space-y-2">
@@ -265,7 +271,7 @@ export default function ProjectsPage() {
                                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-4">
                                 <div className="space-y-2">
                                     <Label>Service Type</Label>
                                     <Select value={form.service_type} onValueChange={(v) => setForm({ ...form, service_type: v })}>
@@ -281,7 +287,7 @@ export default function ProjectsPage() {
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Total Price ($) *</Label>
+                                    <Label>Quoted Price ($) *</Label>
                                     <Input
                                         type="number"
                                         placeholder="8500"
@@ -289,6 +295,23 @@ export default function ProjectsPage() {
                                         value={form.price}
                                         onChange={(e) => setForm({ ...form, price: e.target.value })}
                                     />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Advance %</Label>
+                                    <Select value={form.advance_percentage} onValueChange={(v) => setForm({ ...form, advance_percentage: v })}>
+                                        <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10%</SelectItem>
+                                            <SelectItem value="20">20%</SelectItem>
+                                            <SelectItem value="25">25%</SelectItem>
+                                            <SelectItem value="30">30%</SelectItem>
+                                            <SelectItem value="40">40%</SelectItem>
+                                            <SelectItem value="50">50%</SelectItem>
+                                            <SelectItem value="60">60%</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -343,7 +366,7 @@ export default function ProjectsPage() {
                                         onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-2">
                                         <Label>Service Type</Label>
                                         <Select value={editForm.service_type} onValueChange={(v) => setEditForm({ ...editForm, service_type: v })}>
@@ -359,7 +382,7 @@ export default function ProjectsPage() {
                                         </Select>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Total Price ($) *</Label>
+                                        <Label>Quoted Price ($) *</Label>
                                         <Input
                                             type="number"
                                             placeholder="8500"
@@ -367,6 +390,23 @@ export default function ProjectsPage() {
                                             value={editForm.price}
                                             onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Advance %</Label>
+                                        <Select value={editForm.advance_percentage} onValueChange={(v) => setEditForm({ ...editForm, advance_percentage: v })}>
+                                            <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10%</SelectItem>
+                                                <SelectItem value="20">20%</SelectItem>
+                                                <SelectItem value="25">25%</SelectItem>
+                                                <SelectItem value="30">30%</SelectItem>
+                                                <SelectItem value="40">40%</SelectItem>
+                                                <SelectItem value="50">50%</SelectItem>
+                                                <SelectItem value="60">60%</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                                 <div className="space-y-2">
@@ -437,9 +477,13 @@ export default function ProjectsPage() {
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {filtered.map((project) => {
                         const { advancePaid, finalPaid } = getPaymentStatus(project)
-                        const advanceAmt = project.price * 0.4
-                        const finalAmt = project.price * 0.6
+                        const adv = project.payments?.find((p) => p.type === "advance")
+                        const fin = project.payments?.find((p) => p.type === "final")
+                        const advanceAmt = adv?.amount ?? 0
+                        const finalAmt = fin?.amount ?? 0
                         const progress = finalPaid ? 100 : advancePaid ? 50 : 0
+                        const advPct = project.advance_percentage || 40
+                        const finPct = 100 - advPct
 
                         return (
                             <Card
@@ -485,7 +529,7 @@ export default function ProjectsPage() {
                                 <CardContent className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4 py-3 px-4 rounded-xl bg-zinc-950/50 border border-zinc-800/50">
                                         <div>
-                                            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Advance (40%)</div>
+                                            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Advance ({advPct}%)</div>
                                             <div className="flex items-center gap-2">
                                                 {advancePaid ? (
                                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -496,7 +540,7 @@ export default function ProjectsPage() {
                                             </div>
                                         </div>
                                         <div>
-                                            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Final (60%)</div>
+                                            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Final ({finPct}%)</div>
                                             <div className="flex items-center gap-2">
                                                 {finalPaid ? (
                                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
